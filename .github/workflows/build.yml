@@ -1,0 +1,40 @@
+---
+name: build
+
+on: [push, pull_request]
+
+jobs:
+  linux:
+    runs-on: ubuntu-18.04
+    strategy:
+      matrix:
+        os:
+          - fedora:rawhide
+          - fedora:latest
+          - centos:8
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Show OS information
+        run: |
+          cat /etc/os-release 2>/dev/null || echo /etc/os-release not available
+
+      - name: Install build dependencies
+        run: bash .ci/ci-ctl deps
+
+      - name: Build scrub
+        run: bash .ci/ci-ctl build
+
+      - name: Run tests
+        run: bash .ci/ci-ctl tests
+
+      - name: Show test logs
+        run: bash .ci/ci-ctl test-logs
+
+    container:
+      image: ${{matrix.os}}
+      env:
+        DISTRO: ${{matrix.os}}
+      options: --privileged --device /dev/loop-control
+
+# vim:set ts=2 sw=2 et:

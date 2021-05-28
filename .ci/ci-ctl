@@ -1,0 +1,81 @@
+#!/bin/bash
+set -euxo pipefail
+
+install_deps() {
+    DISTRO=${DISTRO:-}
+    [ -z "${DISTRO}" ] && return 1
+
+    local COMMON="gcc make autoconf automake libtool diffutils hostname"
+    case "${DISTRO}" in
+    debian:*|ubuntu:*)
+        export DEBIAN_FRONTEND=noninteractive
+        apt clean
+        apt update
+        apt -y install build-essential pkg-config libssl-dev zlib1g-dev \
+                       libjansson-dev ${COMMON}
+        ;;
+
+    fedora:*)
+        echo 'max_parallel_downloads=10' >> /etc/dnf/dnf.conf
+        dnf -y clean all
+        dnf -y --setopt=deltarpm=0 update
+        dnf -y install ${COMMON} libgcrypt-devel
+        ;;
+
+    centos:*)
+        yum -y clean all
+        yum -y --setopt=deltarpm=0 update
+        yum install -y yum-utils epel-release
+        yum config-manager -y --set-enabled PowerTools \
+            || yum config-manager -y --set-enabled powertools || :
+        yum -y install ${COMMON} libgcrypt-devel
+        yum-builddep -y scrub
+        ;;
+    esac
+}
+
+build() {
+    ./autogen.sh
+    ./configure
+    make
+}
+
+run_tests() {
+    if ! make check; then
+        [ -r test/test-suite.log ] && cat test/test-suite.log
+        exit 1
+    fi
+}
+
+show_test_logs() {
+    [ -r test/test-suite.log ] || return 0
+    cat test/test-suite.log
+}
+
+usage() {
+    echo "Usage: ci-ctl <deps|build|tests|test-logs>" >&2
+    exit 1
+}
+
+OPTION=${1:-}
+[ -z "${OPTION}" ] && usage
+
+case "${OPTION}" in
+deps)
+    install_deps
+    ;;
+build)
+    build
+    ;;
+tests)
+    run_tests
+    ;;
+test-logs)
+    show_test_logs
+    ;;
+*)
+    usage
+    ;;
+esac
+
+# vim: set ts=8 shiftwidth=4 softtabstop=4 expandtab smarttab colorcolumn=80:
